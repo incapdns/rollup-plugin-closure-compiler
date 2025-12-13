@@ -15,10 +15,7 @@
  */
 
 import { compiler, CompileOptions } from 'google-closure-compiler';
-const {
-  getNativeImagePath,
-  getFirstSupportedPlatform,
-} = require('google-closure-compiler/lib/utils.js');
+const { getNativeImagePath, getFirstSupportedPlatform } = require('google-closure-compiler/lib/utils.js');
 import { postCompilation } from './transformers/chunk/transforms';
 import { RenderedChunk } from 'rollup';
 import { ChunkTransform } from './transform';
@@ -70,7 +67,7 @@ function orderPlatforms(platformPreference: Platform | string): Array<Platform> 
  * @param transforms Transforms to run rollowing compilation
  * @return Promise<string> source following compilation and Transforms.
  */
-export default function(
+export default function (
   compileOptions: CompileOptions,
   chunk: RenderedChunk,
   transforms: Array<ChunkTransform>,
@@ -88,17 +85,17 @@ export default function(
     }
 
     instance.run(async (exitCode: number, code: string, stdErr: string) => {
-      if (
-        'warning_level' in compileOptions &&
-        compileOptions.warning_level === 'VERBOSE' &&
-        stdErr !== ''
-      ) {
+      if ('warning_level' in compileOptions && compileOptions.warning_level === 'VERBOSE' && stdErr !== '') {
         reject(new Error(`Google Closure Compiler ${stdErr}`));
       } else if (exitCode !== 0) {
         reject(new Error(`Google Closure Compiler exit ${exitCode}: ${stdErr}`));
       } else {
-        const postCompiled = await postCompilation(code, chunk, transforms);
-        resolve(postCompiled.code);
+        try {
+          const postCompiled = await postCompilation(code, chunk, transforms);
+          resolve(postCompiled.code);
+        } catch (e) {
+          reject(e); // Agora o erro volta para o index.ts em vez de explodir
+        }
       }
     });
   });

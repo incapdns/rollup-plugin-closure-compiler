@@ -116,7 +116,7 @@ export default function closureCompiler(pluginOptions: ClosurePluginOptions = {}
           map: JSON.parse(await fsPromises.readFile(mapFile, 'utf8')),
         };
       } catch (error) {
-        throw error;
+        return null;
       }
     },
   };
