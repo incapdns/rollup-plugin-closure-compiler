@@ -80,7 +80,6 @@ export default function closureCompiler(pluginOptions: ClosurePluginOptions = {}
       return null;
     },
     renderChunk: async (code: string, chunk: RenderedChunk, outputOptions: OutputOptions) => {
-      // 1. Aplica o filtro nos chunks
       if (!filter(chunk.fileName)) {
         return null;
       }
@@ -97,15 +96,11 @@ export default function closureCompiler(pluginOptions: ClosurePluginOptions = {}
           outputOptions,
         );
 
-        // 2. Proteção na Pré-Compilação (Onde o erro do Popper geralmente ocorre)
         let preCompileOutput = code;
         try {
           const result = await preCompilation(code, chunk, renderChunkTransforms);
           preCompileOutput = result.code;
         } catch (e) {
-          // Se a pré-compilação falhar (devido a sintaxe que o Acorn não entende),
-          // fazemos fallback para o código original e seguimos para o Closure Compiler.
-          // Isso resolve o "SyntaxError: Export 'createPopper' is not defined".
           preCompileOutput = code;
         }
 
