@@ -41,10 +41,11 @@ export const walk = {
 };
 
 const DEFAULT_ACORN_OPTIONS = {
-  ecmaVersion: 2020 as any,
+  ecmaVersion: 'latest' as any,
   sourceType: 'module' as any,
   preserveParens: false,
   ranges: true,
+  allowHashBang: true
 };
 
 export async function parse(fileName: string, source: string): Promise<Program> {
