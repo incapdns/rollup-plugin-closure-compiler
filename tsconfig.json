@@ -19,6 +19,7 @@
     "module": "esnext",
     "allowSyntheticDefaultImports": true,
     "incremental": true,
+    "skipLibCheck": true
   },
   "include": [
     "./**/*.ts",
