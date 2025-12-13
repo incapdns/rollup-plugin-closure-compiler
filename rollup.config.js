@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-import pkg from './package.json';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('./package.json');
 import builtins from 'builtins';
 import copy from 'rollup-plugin-copy';
 
