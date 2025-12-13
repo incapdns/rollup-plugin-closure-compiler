@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS-IS" BASIS,
@@ -16,26 +16,29 @@
 
 import { CompileOptions } from 'google-closure-compiler';
 import { promises as fsPromises } from 'fs';
-import {
-  OutputOptions,
-  Plugin,
-  InputOptions,
-  PluginContext,
-  RenderedChunk,
-  TransformResult,
-} from 'rollup';
+import { createFilter, FilterPattern } from '@rollup/pluginutils'; // <--- NOVO
+import { OutputOptions, Plugin, InputOptions, PluginContext, RenderedChunk, TransformResult } from 'rollup';
 import compiler from './compiler';
 import options from './options';
-import {
-  transform as sourceTransform,
-  create as createSourceTransforms,
-} from './transformers/source/transforms';
+import { transform as sourceTransform, create as createSourceTransforms } from './transformers/source/transforms';
 import { preCompilation, create as createChunkTransforms } from './transformers/chunk/transforms';
 import { Mangle } from './transformers/mangle';
 import { Ebbinghaus } from './transformers/ebbinghaus';
 import { SourceTransform } from './transform';
 
-export default function closureCompiler(requestedCompileOptions: CompileOptions = {}): Plugin {
+// Interface estendida para aceitar include/exclude junto com as opções do compilador
+type ClosurePluginOptions = CompileOptions & {
+  include?: FilterPattern;
+  exclude?: FilterPattern;
+};
+
+export default function closureCompiler(pluginOptions: ClosurePluginOptions = {}): Plugin {
+  // Separa as opções de filtro das opções do compilador
+  const { include, exclude, ...requestedCompileOptions } = pluginOptions;
+
+  // Cria a função de filtro
+  const filter = createFilter(include, exclude);
+
   const mangler: Mangle = new Mangle();
   const memory: Ebbinghaus = new Ebbinghaus();
   let inputOptions: InputOptions;
@@ -44,28 +47,24 @@ export default function closureCompiler(requestedCompileOptions: CompileOptions 
 
   return {
     name: 'closure-compiler',
-    options: options => (inputOptions = options),
+    options: (options) => (inputOptions = options),
     buildStart() {
       context = this;
-      sourceTransforms = createSourceTransforms(
-        context,
-        requestedCompileOptions,
-        mangler,
-        memory,
-        inputOptions,
-        {},
-      );
+      sourceTransforms = createSourceTransforms(context, requestedCompileOptions, mangler, memory, inputOptions, {});
       if (
         'compilation_level' in requestedCompileOptions &&
         requestedCompileOptions.compilation_level === 'ADVANCED_OPTIMIZATIONS' &&
         Array.isArray(inputOptions.input)
       ) {
-        context.warn(
-          'Code Splitting with Closure Compiler ADVANCED_OPTIMIZATIONS is not currently supported.',
-        );
+        context.warn('Code Splitting with Closure Compiler ADVANCED_OPTIMIZATIONS is not currently supported.');
       }
     },
     transform: async (code: string, id: string): Promise<TransformResult> => {
+      // <--- APLICA O FILTRO NOS ARQUIVOS FONTE
+      if (!filter(id)) {
+        return null;
+      }
+
       if (sourceTransforms.length > 0) {
         const output = await sourceTransform(code, id, sourceTransforms);
         return output || null;
@@ -73,6 +72,12 @@ export default function closureCompiler(requestedCompileOptions: CompileOptions 
       return null;
     },
     renderChunk: async (code: string, chunk: RenderedChunk, outputOptions: OutputOptions) => {
+      // <--- APLICA O FILTRO NOS CHUNKS (IMPORTANTE SE USAR MANUALCHUNKS)
+      // Se o chunk for ignorado, retorna null (não processa com o Closure)
+      if (!filter(chunk.fileName)) {
+        return null;
+      }
+
       mangler.debug();
 
       const renderChunkTransforms = createChunkTransforms(
