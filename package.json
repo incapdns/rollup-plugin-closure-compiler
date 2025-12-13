@@ -29,7 +29,8 @@
     "build": "rimraf dist transpile transpile-tests && tsc -p tsconfig.json & wait",
     "postbuild": "rollup -c",
     "release": "np --no-2fa --any-branch",
-    "prepublishOnly": "npm-run-all build"
+    "prepublishOnly": "npm-run-all build",
+    "prepare": "npm run build"
   },
   "peerDependencies": {
     "rollup": ">=1.27"
