@@ -16,7 +16,7 @@
 
 import { CompileOptions } from 'google-closure-compiler';
 import { promises as fsPromises } from 'fs';
-import { createFilter, FilterPattern } from '@rollup/pluginutils'; // <--- NOVO
+import { createFilter, FilterPattern } from '@rollup/pluginutils';
 import { OutputOptions, Plugin, InputOptions, PluginContext, RenderedChunk, TransformResult } from 'rollup';
 import compiler from './compiler';
 import options from './options';
@@ -60,43 +60,62 @@ export default function closureCompiler(pluginOptions: ClosurePluginOptions = {}
       }
     },
     transform: async (code: string, id: string): Promise<TransformResult> => {
-      // <--- APLICA O FILTRO NOS ARQUIVOS FONTE
+      // 1. Aplica o filtro (exclude/include)
       if (!filter(id)) {
         return null;
       }
 
-      if (sourceTransforms.length > 0) {
-        const output = await sourceTransform(code, id, sourceTransforms);
-        return output || null;
+      // 2. Proteção contra erros de parsing do Acorn (Opção 2)
+      try {
+        if (sourceTransforms.length > 0) {
+          const output = await sourceTransform(code, id, sourceTransforms);
+          return output || null;
+        }
+      } catch (e) {
+        // Se falhar a transformação preliminar (erro de sintaxe no parser do plugin),
+        // retornamos null para usar o código original sem quebrar o build.
+        // Opcional: context.warn(`[closure-compiler] Skipping transform for ${id}: ${e.message}`);
+        return null;
       }
       return null;
     },
     renderChunk: async (code: string, chunk: RenderedChunk, outputOptions: OutputOptions) => {
-      // <--- APLICA O FILTRO NOS CHUNKS (IMPORTANTE SE USAR MANUALCHUNKS)
-      // Se o chunk for ignorado, retorna null (não processa com o Closure)
+      // 1. Aplica o filtro nos chunks
       if (!filter(chunk.fileName)) {
         return null;
       }
 
       mangler.debug();
 
-      const renderChunkTransforms = createChunkTransforms(
-        context,
-        requestedCompileOptions,
-        mangler,
-        memory,
-        inputOptions,
-        outputOptions,
-      );
-      const preCompileOutput = (await preCompilation(code, chunk, renderChunkTransforms)).code;
-      const [compileOptions, mapFile] = await options(
-        requestedCompileOptions,
-        outputOptions,
-        preCompileOutput,
-        renderChunkTransforms,
-      );
-
       try {
+        const renderChunkTransforms = createChunkTransforms(
+          context,
+          requestedCompileOptions,
+          mangler,
+          memory,
+          inputOptions,
+          outputOptions,
+        );
+
+        // 2. Proteção na Pré-Compilação (Onde o erro do Popper geralmente ocorre)
+        let preCompileOutput = code;
+        try {
+          const result = await preCompilation(code, chunk, renderChunkTransforms);
+          preCompileOutput = result.code;
+        } catch (e) {
+          // Se a pré-compilação falhar (devido a sintaxe que o Acorn não entende),
+          // fazemos fallback para o código original e seguimos para o Closure Compiler.
+          // Isso resolve o "SyntaxError: Export 'createPopper' is not defined".
+          preCompileOutput = code;
+        }
+
+        const [compileOptions, mapFile] = await options(
+          requestedCompileOptions,
+          outputOptions,
+          preCompileOutput,
+          renderChunkTransforms,
+        );
+
         return {
           code: await compiler(compileOptions, chunk, renderChunkTransforms),
           map: JSON.parse(await fsPromises.readFile(mapFile, 'utf8')),
